@@ -1,0 +1,27 @@
+import { MainMenu } from "menu.slint";
+import { Info } from "global_info.slint";
+enum Screen {
+    Menu,
+    Leaderboard
+}
+
+export component App inherits Window {
+    in-out property <Screen> current_screen: Menu;
+
+    title: "Subchunker";
+    full-screen: false;
+    height: 600px;
+    width: 1024px;
+
+    public function set_screen(screen: Screen) {
+        self.current_screen = screen;
+    }
+
+    MainMenu {
+        visible: current_screen == Screen.Menu;
+    }
+}
+
+export {
+    Info
+}

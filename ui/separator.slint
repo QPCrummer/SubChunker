@@ -1,0 +1,33 @@
+export component SeparatorLine {
+    in property <Orientation> orientation: horizontal;
+
+    property <length> overall-thickness: max(10px, 1phx);
+    property <length> line-thickness: max(1.2px, 1phx);
+
+    states [
+        horizontal when orientation == Orientation.horizontal : {
+            root.min-height: root.overall-thickness;
+            line-rectangle.height: root.line-thickness;
+
+            line-rectangle.width: root.width;
+
+            root.horizontal-stretch: 100%;
+            root.vertical-stretch: 0%;
+        }
+
+        vertical when orientation == Orientation.vertical : {
+            root.min-width: root.overall-thickness;
+            line-rectangle.width: root.line-thickness;
+
+            line-rectangle.height: root.height;
+
+            root.vertical-stretch: 100%;
+            root.horizontal-stretch: 0%;
+        }
+    ]
+
+    line-rectangle := Rectangle {
+        background: white;
+        border-radius: root.line-thickness / 2;
+    }
+}
