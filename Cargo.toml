@@ -8,7 +8,7 @@ build = "build.rs"
 slint = "1.14.1"
 sysinfo = "0.37.2"
 os_info = "3.14.0"
-rust-gpu-tools = "0.7.2"
+rust-gpu-tools = { version = "0.7.2", features = ["opencl"], default-features = false }
 
 [build-dependencies]
 slint-build = "1.14.1"
