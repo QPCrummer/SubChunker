@@ -1,7 +1,9 @@
 import { BasicScreen } from "basic_screen.slint";
-import { Info } from "global_info.slint";
-import { ProgressIndicator, CheckBox, ScrollView, Slider, Button } from "std-widgets.slint";
+import { Info, BenchmarkingStatus } from "global_info.slint";
+import { ProgressIndicator, CheckBox, ScrollView, Slider, Button, ComboBox } from "std-widgets.slint";
 import { SeparatorLine } from "separator.slint";
+import { Callbacks } from "callbacks.slint";
+
 export component MainMenu inherits BasicScreen {
     in-out property <string> processor_name;
 
@@ -50,10 +52,10 @@ export component MainMenu inherits BasicScreen {
                     text: "Processor: " + Info.processor + " (" + Info.logical_cpu_processors + ")";
                 }
                 Text {
-                    text: "Graphics Processor: " + Info.graphics_processor + " (" + Info.logical_gpu_processors + ")";
+                    text: "Graphics Processor(s): " + Info.graphics_processor;
                 }
                 Text {
-                    text: "Memory: " + Info.memory_capacity_mib + "MiB";
+                    text: "Memory: " + Info.memory_capacity_gb + "GB";
                 }
                 Text {
                     text: "OS: " + Info.os;
@@ -113,7 +115,7 @@ export component MainMenu inherits BasicScreen {
             y: 15px;
         }
 
-        configure := Rectangle {
+        if Info.status == BenchmarkingStatus.Configure: configure := Rectangle {
             width: 80%;
             height: 80%;
 
@@ -123,12 +125,40 @@ export component MainMenu inherits BasicScreen {
                 y: 0px;
             }
 
-            ScrollView {
+            conf_scroll := ScrollView {
                 height: configure.height - conf_text.height - conf_text.y - 25px;
                 y: conf_text.y + 25px;
                 vert := VerticalLayout {
                     alignment: start;
                     spacing: 10px;
+                    Text {
+                        text: "Minecraft";
+                        font-size: 11pt;
+                    }
+                    ComboBox {
+                        model: Info.stable_minecraft_versions;
+                        current-index: 0;
+                        selected(current-value) => {
+                            Info.selected_minecraft_version = current-value;
+                        }
+                    }
+
+                    SeparatorLine {}
+
+                    Text {
+                        text: "Fabric Loader";
+                        font-size: 11pt;
+                    }
+                    ComboBox {
+                        model: Info.stable_fabric_loader_versions;
+                        current-index: 0;
+                        selected(current-value) => {
+                            Info.selected_fabric_loader_version = current-value;
+                        }
+                    }
+
+                    SeparatorLine {}
+
                     Text {
                         text: "Mods";
                         font-size: 11pt;
@@ -186,7 +216,7 @@ export component MainMenu inherits BasicScreen {
                     SeparatorLine {}
 
                     Text {
-                        text: "Memory Allocated (GiB)";
+                        text: "Memory Allocated (GB)";
                     }
                     HorizontalLayout {
                         Text {
@@ -194,7 +224,7 @@ export component MainMenu inherits BasicScreen {
                         }
                         Slider {
                             width: 90%;
-                            maximum: Info.memory_capacity_mib / 1024;
+                            maximum: Info.memory_capacity_gb;
                             minimum: 1;
                             step: 1;
                             changed(value) => {
@@ -206,11 +236,37 @@ export component MainMenu inherits BasicScreen {
                     SeparatorLine {}
                 }
             }
+
+            Button {
+                text: "Run Benchmark";
+                y: conf_scroll.y + conf_scroll.height + 15px;
+                clicked => {
+                    Callbacks.run_benchmark();
+                }
+            }
         }
-        Button {
-            text: "Run Benchmark";
-            y: configure.y + configure.height;
-            clicked => {}
+
+        if Info.status == BenchmarkingStatus.Install: Rectangle {
+            width: 80%;
+            height: 80%;
+
+            install_text := Text {
+                text: "Installing";
+                font-size: 12pt;
+                y: 0px;
+            }
+
+            prgs := ProgressIndicator {
+                progress <=> Info.installing;
+                width: 80%;
+                height: 40px;
+                y: install_text.y + install_text.height + 15px;
+            }
+
+            Text {
+                text <=> Info.installer_msg;
+                y: prgs.y + prgs.height + 15px;
+            }
         }
     }
 }

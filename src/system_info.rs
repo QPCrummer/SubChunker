@@ -1,65 +1,47 @@
-use rust_gpu_tools::Device;
-use sysinfo::System;
+use hwinfo_rs::hwinfo;
 
-#[derive(Clone)]
-pub struct GPUInfo {
-    pub name: String,
-    pub cores: u32,
-    pub ocl_capable: bool,
+pub struct SystemInfo {
+    pub os: String,
+    pub cpu: String,
+    pub cores: i32,
+    pub gpus: String,
+    pub memory: f64,
 }
 
-impl GPUInfo {
-    pub fn collect() -> Vec<Self> {
-        let mut gpu_info = Vec::new();
-        for gpu in Device::all() {
-            let info = GPUInfo {
-                name: gpu.name(),
-                cores: gpu.compute_units(),
-                ocl_capable: gpu.opencl_device().is_some(),
-            };
-            gpu_info.push(info);
+impl SystemInfo {
+    pub fn get() -> hwinfo::Result<SystemInfo> {
+        let os = hwinfo::os_info()?;
+        let mem = hwinfo::memory_info()?;
+        let cpus_vec = hwinfo::cpus()?;
+        let cpu: String = if cpus_vec.len() > 1 {
+            cpus_vec[0].model_name.clone() + " x" + cpus_vec.len().to_string().as_str()
+        } else {
+            cpus_vec[0].model_name.clone()
+        };
+        let cores: i32 = cpus_vec.iter().map(|cpu| cpu.num_logical_cores).sum();
+        let gpus_vec = hwinfo::gpus()?;
+        let mut gpus: String = String::new();
+        for gpu in gpus_vec {
+            if !gpus.is_empty() {
+                gpus.push_str("\n");
+            }
+            if gpu.num_cores != 0 {
+                gpus.push_str(&*(gpu.name + " (" + gpu.num_cores.to_string().as_str() + ")"));
+            } else {
+                gpus.push_str(&*(gpu.name));
+            }
         }
-        gpu_info
+
+        Ok(SystemInfo {
+            os: os.name,
+            cpu,
+            cores,
+            gpus,
+            memory: bytes_to_gb(mem.total_bytes)
+        })
     }
 }
 
-pub struct CPUMemoryInfo {
-    pub name: String,
-    pub logical_cores: u32,
-    pub memory: u64,
+fn bytes_to_gb(bytes: i64) -> f64 {
+    bytes as f64 / 1_073_741_824.0
 }
-
-impl CPUMemoryInfo {
-    pub fn collect() -> Self {
-        let sys = System::new_all();
-        CPUMemoryInfo {
-            name: sys.cpus()[0].brand().to_string(),
-            logical_cores: sys.cpus().len() as u32,
-            memory: sys.total_memory()
-        }
-    }
-}
-
-pub struct OSInfo {
-    pub os_type: String,
-    pub os_version: String,
-    pub os_architecture: String,
-    pub os_bitness: String,
-}
-
-impl OSInfo {
-    pub fn collect() -> Self {
-        let os = os_info::get();
-        OSInfo {
-            os_type: os.os_type().to_string(),
-            os_version: os.version().to_string(),
-            os_bitness: os.bitness().to_string(),
-            os_architecture: os.architecture().unwrap_or_default().to_string(),
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        self.os_type.clone() + " " + &*self.os_version + " " + &*self.os_architecture + " " + &*self.os_bitness
-    }
-}
-

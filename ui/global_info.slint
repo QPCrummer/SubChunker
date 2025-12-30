@@ -1,10 +1,16 @@
+export enum BenchmarkingStatus {
+    Configure,
+    Install,
+    Running,
+    Finished
+}
+
 export global Info {
-    in-out property <string> processor: "AMD 5950x";
-    in-out property <int> logical_cpu_processors: 32;
-    in-out property <int> memory_capacity_mib: 61035;
-    in-out property <string> graphics_processor: "Nvidia RTX 3090";
-    in-out property <int> logical_gpu_processors:  10496;
-    in-out property <string> os: "Windows 10 Home";
+    in-out property <string> processor: "Unknown";
+    in-out property <int> logical_cpu_processors: 0;
+    in-out property <int> memory_capacity_gb: 0;
+    in-out property <string> graphics_processor: "Unknown";
+    in-out property <string> os: "Unknown";
     in-out property <[int]> top_personal_runs: [20, 15, 10, 5];
     in-out property <[string]> recommended_mod_list: ["Lithium", "ScalableLux", "C2me", "FerriteCore"];
     in-out property <[bool]> recommended_mods_toggle: [true, true, true, true];
@@ -15,4 +21,11 @@ export global Info {
     in-out property <[string]> args: ["UseCompactObjectHeaders", "LargePages"];
     in-out property <[bool]> args_toggle: [true, true];
     in-out property <int> ram_alloc: 1;
+    in-out property <[string]> stable_minecraft_versions;
+    in-out property <string> selected_minecraft_version;
+    in-out property <[string]> stable_fabric_loader_versions;
+    in-out property <string> selected_fabric_loader_version;
+    in-out property <BenchmarkingStatus> status: BenchmarkingStatus.Configure;
+    in-out property <float> installing: 0.0;
+    in-out property <string> installer_msg: "";
 }
