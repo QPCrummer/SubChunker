@@ -1,14 +1,14 @@
-use std::{env, fs, io};
+use crate::benchmark::launch_jar;
+use crate::BenchmarkingStatus;
+use reqwest::blocking::Client;
+use serde::Deserialize;
+use slint::Model;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
-use reqwest::blocking::Client;
-use slint::{ComponentHandle, Model};
+use std::{env, fs, io};
 use zip::ZipArchive;
-use serde::Deserialize;
-use crate::{App, BenchmarkingStatus, Info};
-use crate::benchmark::launch_jar;
 
 pub const MAIN_DIR: &str = "subchunker";
 pub const SERVER_DIR: &str = "subchunker/server";

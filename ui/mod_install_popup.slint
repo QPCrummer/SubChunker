@@ -1,0 +1,50 @@
+import {Button} from "std-widgets.slint";
+import { Callbacks } from "callbacks.slint";
+import { Info } from "global_info.slint";
+
+export component ModInstallPopup inherits Rectangle {
+    border-color: lightblue;
+    background: #2C2F36;
+    border-radius: 10px;
+    border-width: 2px;
+
+    width: 300px;
+    height: 200px;
+
+    txt := Text {
+        text: "Please install: " + Info.current_mod_download;
+        font-size: 12pt;
+        y: 10px;
+    }
+
+    hl := HorizontalLayout {
+        y: txt.y + txt.height + 20px;
+        width: 90%;
+        spacing: 5px;
+        height: 50px;
+        Button {
+            text: "Open Modrinth";
+            preferred-height: 50px;
+            clicked => {
+                Callbacks.install_mod(Info.current_mod_download);
+            }
+        }
+
+        Button {
+            text: "Open Mods Folder";
+            preferred-height: 50px;
+            clicked => {
+                Callbacks.open_mods_folder();
+            }
+        }
+    }
+
+    Button {
+        y: hl.y + hl.height + 20px;
+        text: "Continue";
+        preferred-height: 50px;
+        clicked => {
+            Callbacks.next_mod();
+        }
+    }
+}

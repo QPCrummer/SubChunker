@@ -1,6 +1,7 @@
 export enum BenchmarkingStatus {
     Configure,
     Install,
+    InstallMod,
     Running,
     Finished
 }
@@ -28,4 +29,6 @@ export global Info {
     in-out property <BenchmarkingStatus> status: BenchmarkingStatus.Configure;
     in-out property <float> installing: 0.0;
     in-out property <string> installer_msg: "";
+    in-out property <string> current_mod_download;
+    in-out property <int> current_mod_download_index: 0;
 }

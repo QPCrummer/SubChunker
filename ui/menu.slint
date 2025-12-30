@@ -3,6 +3,7 @@ import { Info, BenchmarkingStatus } from "global_info.slint";
 import { ProgressIndicator, CheckBox, ScrollView, Slider, Button, ComboBox } from "std-widgets.slint";
 import { SeparatorLine } from "separator.slint";
 import { Callbacks } from "callbacks.slint";
+import { ModInstallPopup } from "mod_install_popup.slint";
 
 export component MainMenu inherits BasicScreen {
     in-out property <string> processor_name;
@@ -266,6 +267,17 @@ export component MainMenu inherits BasicScreen {
             Text {
                 text <=> Info.installer_msg;
                 y: prgs.y + prgs.height + 15px;
+            }
+        }
+
+        if Info.status == BenchmarkingStatus.InstallMod: Rectangle {
+            install_mod_text := Text {
+                text: "Installing Mods";
+                font-size: 12pt;
+                y: 0px;
+            }
+            mod := ModInstallPopup {
+                y: install_mod_text.y + install_mod_text.height + 20px;
             }
         }
     }
