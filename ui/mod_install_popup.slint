@@ -8,13 +8,22 @@ export component ModInstallPopup inherits Rectangle {
     border-radius: 10px;
     border-width: 2px;
 
-    width: 300px;
+    width: 400px;
     height: 200px;
 
-    txt := Text {
-        text: "Please install: " + Info.current_mod_download;
-        font-size: 12pt;
+    txt := HorizontalLayout {
         y: 10px;
+        spacing: 5px;
+        alignment: center;
+        Text {
+            text: "Please install: ";
+            font-size: 12pt;
+        }
+
+        Text {
+            text <=> Info.current_mod_download;
+            font-size: 12pt;
+        }
     }
 
     hl := HorizontalLayout {

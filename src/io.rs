@@ -1,14 +1,11 @@
 use crate::benchmark::launch_jar;
+use crate::java::{install_java, java_installed};
 use crate::BenchmarkingStatus;
-use reqwest::blocking::Client;
-use serde::Deserialize;
-use slint::Model;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::{env, fs, io};
-use zip::ZipArchive;
 
 pub const MAIN_DIR: &str = "subchunker";
 pub const SERVER_DIR: &str = "subchunker/server";
@@ -55,7 +52,7 @@ pub enum InstallerMsg {
 }
 
 // Installing
-pub fn install_fabric_server(mc_ver: &str, fabric_ver: &str, jvms: Vec<String>, ram: u32, sender: &Sender<InstallerMsg>) -> io::Result<()> {
+pub fn install_fabric_server(mc_ver: &str, fabric_ver: &str, jvm: &str, ram: u32, sender: &Sender<InstallerMsg>) -> io::Result<()> {
     // Install MC
     if !mc_ver_installed(mc_ver.to_string()) {
         sender.send(InstallerMsg::InstallingMsg(format!("Installing Minecraft {}", mc_ver))).ok();
@@ -88,22 +85,17 @@ pub fn install_fabric_server(mc_ver: &str, fabric_ver: &str, jvms: Vec<String>, 
     sender.send(InstallerMsg::Progress(0.25)).ok();
 
     // Install Java
-    let progress_per_jvm = 0.4 / jvms.iter().len() as f32;
-    let mut progress = 0.25;
-    for jvm in jvms.iter() {
-        if !java_installed(jvm.as_str()) {
-            sender.send(InstallerMsg::InstallingMsg(format!("Installing {} JVM", jvm))).ok();
-            install_java(jvm.as_str())?;
-        }
-        progress += progress_per_jvm;
-        sender.send(InstallerMsg::Progress(progress)).ok();
+
+    if !java_installed(jvm) {
+        sender.send(InstallerMsg::InstallingMsg(format!("Installing {} JVM", jvm))).ok();
+        install_java(jvm)?;
     }
     sender.send(InstallerMsg::Progress(0.65)).ok();
 
     // Run until EULA
     if !eula_exists(mc_ver.to_string()) {
         sender.send(InstallerMsg::InstallingMsg("Installing Minecraft Libraries".to_string())).ok();
-        launch_jar(mc_ver.to_string(), jvms.iter().nth(0).unwrap().to_string(), ram, vec![]);
+        launch_jar(mc_ver.to_string(), jvm.to_string(), ram, vec![], None);
         write_eula(mc_ver.to_string());
     }
 
@@ -111,198 +103,6 @@ pub fn install_fabric_server(mc_ver: &str, fabric_ver: &str, jvms: Vec<String>, 
     Ok(())
 }
 
-// Installing JVMs
-fn java_installed(distro: &str) -> bool {
-    fs::exists(java_dir().join(&*distro.to_lowercase())).unwrap_or(false)
-}
-
-pub fn install_java(distro: &str) -> io::Result<()> {
-    let url = match distro {
-        "Azul" => {
-            let api_url = azul_url();
-            println!("Requesting Azul API JSON from {}", api_url);
-
-            let client = Client::new();
-            let resp = client
-                .get(&api_url)
-                .send()
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-            if !resp.status().is_success() {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("API request failed: {}", resp.status()),
-                ));
-            }
-
-            let azul_json: AzulJson = resp
-                .json()
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-            azul_json.url
-        }
-        "Adoptium" => adoptium_url(),
-        "Graalvm" => graalvm_url(),
-        _ => panic!("Unknown JVM distro"),
-    };
-
-    println!("Downloading {}", url);
-
-    let response = reqwest::blocking::get(&url)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-    let bytes = response
-        .bytes()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-    let filename = format!("{}/{}.zip", java_dir().to_str().unwrap(), distro.to_lowercase());
-    println!("Saving to {}", filename);
-    let mut file = File::create(&filename)?;
-    file.write_all(&bytes)?;
-
-    println!(
-        "Extracting {}",
-        java_dir().join(distro.to_lowercase()).to_str().unwrap()
-    );
-    extract_zip(
-        Path::new(&filename),
-        &java_dir().join(distro.to_lowercase()),
-    )?;
-
-    Ok(())
-}
-
-fn platform() -> (&'static str, &'static str) {
-    let os = if cfg!(target_os = "windows") {
-        "windows"
-    } else if cfg!(target_os = "linux") {
-        "linux"
-    } else if cfg!(target_os = "macos") {
-        "mac"
-    } else {
-        panic!("Unsupported OS");
-    };
-
-    let arch = if cfg!(target_arch = "x86_64") {
-        "x64"
-    } else if cfg!(target_arch = "aarch64") {
-        "aarch64"
-    } else {
-        panic!("Unsupported architecture");
-    };
-
-    (os, arch)
-}
-
-#[derive(Debug, Deserialize)]
-struct AzulJson {
-    url: String,
-}
-
-fn azul_url() -> String {
-    let (os, arch) = platform();
-    format!(
-        "https://api.azul.com/zulu/download/community/v1.0/bundles/latest?java_version=25&os={}&arch={}&ext=zip&bundle_type=jdk",
-        os, arch
-    )
-}
-
-fn adoptium_url() -> String {
-    let (os, arch) = platform();
-
-    format!(
-        "https://api.adoptium.net/v3/binary/latest/25/ga/{}/{}/jdk/hotspot/normal/eclipse?project=jdk",
-        os, arch
-    )
-}
-
-fn graalvm_url() -> String {
-    let (os, arch) = platform();
-
-    let os_str = match os {
-        "windows" => "windows",
-        "linux" => "linux",
-        "mac" => "darwin",
-        _ => unreachable!(),
-    };
-
-    let arch_str = match arch {
-        "x64" => "x64",
-        "aarch64" => "aarch64",
-        _ => unreachable!(),
-    };
-
-    // GraalVM 25 release version
-    let version = "25.0.1";
-
-    // Correct URL pattern
-    format!(
-        "https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-{version}/graalvm-community-jdk-{version}_{os_str}-{arch_str}_bin.zip",
-        version = version,
-        os_str = os_str,
-        arch_str = arch_str,
-    )
-}
-
-fn extract_zip(zip_path: &Path, output_dir: &Path) -> io::Result<()> {
-    let file = File::open(zip_path)?;
-    let mut archive = ZipArchive::new(file)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-    // Determine top-level folder name to strip
-    let mut top_level = None;
-    for i in 0..archive.len() {
-        let entry = archive.by_index(i)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        let path = entry.mangled_name();
-        if let Some(first) = path.iter().next() {
-            top_level = Some(first.to_owned());
-            break;
-        }
-    }
-    top_level.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Empty zip"))?;
-
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-        let mut out_path = PathBuf::new();
-
-
-        let name = entry.mangled_name();
-        let mut components = name.components();
-        components.next();
-        for comp in components {
-            out_path.push(comp.as_os_str());
-        }
-
-        let out_path = output_dir.join(out_path);
-
-        if entry.is_dir() {
-            fs::create_dir_all(&out_path)?;
-        } else {
-            if let Some(parent) = out_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            let mut outfile = File::create(&out_path)?;
-            io::copy(&mut entry, &mut outfile)?;
-
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                if let Some(mode) = entry.unix_mode() {
-                    fs::set_permissions(&out_path, fs::Permissions::from_mode(mode))?;
-                }
-            }
-        }
-    }
-
-    // Delete the zip after extraction
-    fs::remove_file(zip_path)?;
-
-    Ok(())
-}
 
 // Info functions
 fn installed_minecraft_versions() -> Vec<String> {

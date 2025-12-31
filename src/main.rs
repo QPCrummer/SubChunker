@@ -1,5 +1,5 @@
 use crate::io::{first_time_setup, get_fabric_loader_versions, get_minecraft_versions, install_fabric_server, server_dir, InstallerMsg};
-use crate::mods::{get_url, MODS};
+use crate::mods::{get_mods, get_url, is_mod_installed, MODS, REQ_MODS};
 use crate::slint_utils::{bool_arr_to_rc, string_arr_to_rc, string_vec_to_rc};
 use crate::system_info::SystemInfo;
 use slint::{Model, SharedString};
@@ -7,12 +7,14 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread;
+use crate::benchmark::start_benchmark;
 
 mod system_info;
 mod io;
 mod slint_utils;
 mod benchmark;
 mod mods;
+mod java;
 
 slint::include_modules!();
 fn main() {
@@ -47,12 +49,15 @@ fn main() {
     appdata.set_recommended_mod_list(string_arr_to_rc(&MODS));
     appdata.set_recommended_mods_toggle(bool_arr_to_rc(&[true; MODS.len()]));
 
+    // Populate JVM
+    appdata.set_selected_jvm(SharedString::from("Azul"));
+
     // Callbacks
     let callbacks = app.global::<Callbacks>();
-    let weak_app_root = app.as_weak();
+    let master_weak_app = app.as_weak();
 
     callbacks.on_run_benchmark({
-        let weak_app_root = weak_app_root.clone();
+        let weak_app_root = master_weak_app.clone();
 
         move || {
             let (tx, rx) = mpsc::channel::<InstallerMsg>();
@@ -60,12 +65,11 @@ fn main() {
             let weak_app_ui = weak_app_root.clone();
             let app = weak_app_ui.upgrade().unwrap();
 
-            let (mc_ver, fabric_ver, jvms, ram) = {
-                let jvms = app.global::<Info>().get_jvms();
+            let (mc_ver, fabric_ver, jvm, ram) = {
                 (
                     app.global::<Info>().get_selected_minecraft_version(),
                     app.global::<Info>().get_selected_fabric_loader_version(),
-                    jvms.iter().map(|j| j.to_string()).collect::<Vec<_>>(),
+                    app.global::<Info>().get_selected_jvm(),
                     app.global::<Info>().get_ram_alloc() as u32,
                 )
             };
@@ -73,10 +77,11 @@ fn main() {
             app.global::<Info>().set_status(BenchmarkingStatus::Install);
 
             // Worker thread
+            let mc_ver_clone = mc_ver.clone();
             thread::spawn({
                 let tx = tx.clone();
                 move || {
-                    if install_fabric_server(&mc_ver, &fabric_ver, jvms, ram, &tx).is_err() {
+                    if install_fabric_server(&mc_ver, &fabric_ver, &jvm, ram, &tx).is_err() {
                         return;
                     }
 
@@ -99,15 +104,52 @@ fn main() {
                         while let Ok(msg) = rx.try_recv() {
                             match msg {
                                 InstallerMsg::Progress(p) => {
-                                    app.global::<Info>().set_installing(p);
+                                    app.global::<Info>().set_progress(p);
                                 }
                                 InstallerMsg::Status(s) => {
-                                    app.global::<Info>().set_status(s);
-
                                     if s == BenchmarkingStatus::InstallMod {
+                                        app.global::<Info>().set_progress(0.0);
+                                        // Check installed mods
+                                        let installed_mods = get_mods(mc_ver_clone.to_string());
+                                        let mut skip_mod_installs: bool = true;
+                                        let mut new_recommended_mods_toggle: [bool; MODS.len()] = [false; MODS.len()];
+                                        for (i, should_install) in app.global::<Info>().get_recommended_mods_toggle().iter().enumerate() {
+                                            if !should_install {
+                                                continue;
+                                            }
+
+                                            let mod_to_check = MODS.get(i).unwrap();
+                                            if !installed_mods.contains(&mod_to_check.to_lowercase()) {
+                                                skip_mod_installs = false;
+                                                new_recommended_mods_toggle[i] = true;
+                                            }
+                                        }
+
+                                        // Check required mods
+                                        for req_mod in REQ_MODS {
+                                            if !installed_mods.contains(&req_mod.to_lowercase()) {
+                                                skip_mod_installs = false;
+                                                break;
+                                            }
+                                        }
+
+                                        // Set first mod to install
+                                        if skip_mod_installs {
+                                            app.global::<Info>().set_status(BenchmarkingStatus::Running);
+                                            println!("Begin Benchmark");
+                                            start_benchmark(&weak_app_ui);
+                                        } else {
+                                            app.global::<Info>().set_recommended_mods_toggle(bool_arr_to_rc(&new_recommended_mods_toggle));
+                                            app.global::<Callbacks>().invoke_next_mod();
+
+                                            app.global::<Info>().set_status(s);
+                                        }
+
                                         timer_for_cb.borrow().stop();
                                         return;
                                     }
+
+                                    app.global::<Info>().set_status(s);
                                 }
                                 InstallerMsg::Error(e) => {
                                     eprintln!("Installer error: {}", e);
@@ -126,43 +168,66 @@ fn main() {
     });
 
     callbacks.on_install_mod({
-        let weak_app_root = weak_app_root.clone();
-        let mc_ver = app.global::<Info>().get_selected_minecraft_version();
+        let weak_app_root = master_weak_app.clone().unwrap();
         move |string| {
+            let mc_ver = weak_app_root.global::<Info>().get_selected_minecraft_version();
             let url = get_url(string.to_string(), mc_ver.to_string());
-            // TODO Open Browser
+            webbrowser::open(&url).unwrap();
         }
     });
     
     callbacks.on_open_mods_folder({
-        let weak_app_root = weak_app_root.clone();
-        let mc_ver = app.global::<Info>().get_selected_minecraft_version();
+        let weak_app_root = master_weak_app.clone().unwrap();
         move || {
+            let mc_ver = weak_app_root.global::<Info>().get_selected_minecraft_version();
             let directory = server_dir().join(mc_ver.to_string()).join("mods");
-            // TODO Open File Explorer
+            open::that(directory).unwrap();
         }
     });
     
     callbacks.on_next_mod({
-        let weak_app_root = weak_app_root.clone().unwrap();
-        let index = app.global::<Info>().get_current_mod_download_index();
+        let weak_app_root = master_weak_app.clone();
         move || {
+            let app = weak_app_root.upgrade().unwrap();
+            let index = app.global::<Info>().get_current_mod_download_index();
+            let mc_ver = app.global::<Info>().get_selected_minecraft_version();
             let mut next_index = index + 1;
-            while !weak_app_root.global::<Info>().get_recommended_mods_toggle().iter().nth(next_index as usize).unwrap() {
-                next_index += 1;
+
+            loop {
                 if next_index >= MODS.len() as i32 {
-                    // TODO Install Chunky
-                    
-                    // TODO Begin benchmark
-                    weak_app_root.global::<Info>().set_status(BenchmarkingStatus::Running);
-                    // start_benchmark(&tx);
+                    let req_mods_index = next_index - MODS.len() as i32;
+                    if req_mods_index < REQ_MODS.len() as i32 {
+                        // Look at required mods
+                        let next_mod = REQ_MODS.get(req_mods_index as usize).unwrap();
+                        if is_mod_installed(next_mod.to_string(), mc_ver.to_string()) {
+                            next_index += 1;
+                            app.global::<Info>().set_current_mod_download_index(next_index);
+                            continue;
+                        } else {
+                            app.global::<Info>().set_current_mod_download(SharedString::from(*next_mod));
+                            next_index += 1;
+                            app.global::<Info>().set_current_mod_download_index(next_index);
+                            return;
+                        }
+                    }
+
+                    app.global::<Info>().set_current_mod_download_index(-1);
+                    app.global::<Info>().set_status(BenchmarkingStatus::Running);
+                    println!("Begin Benchmark");
+                    start_benchmark(&weak_app_root);
                     return;
                 }
+
+                if app.global::<Info>().get_recommended_mods_toggle().iter().nth(next_index as usize).unwrap() {
+                    break;
+                }
+
+                next_index += 1;
             }
-          
-            weak_app_root.global::<Info>().set_current_mod_download_index(next_index);
+
+            app.global::<Info>().set_current_mod_download_index(next_index);
             let next_mod = MODS.get(next_index as usize).unwrap();
-            weak_app_root.global::<Info>().set_current_mod_download(SharedString::from(*next_mod));
+            app.global::<Info>().set_current_mod_download(SharedString::from(*next_mod));
         }
     });
 

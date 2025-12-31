@@ -16,7 +16,7 @@ export global Info {
     in-out property <[string]> recommended_mod_list: ["Lithium", "ScalableLux", "C2me", "FerriteCore"];
     in-out property <[bool]> recommended_mods_toggle: [true, true, true, true];
     in-out property <[string]> jvms: ["Azul", "Adoptium", "Graalvm"];
-    in-out property <[bool]> jvms_toggle: [true, true, true, true];
+    in-out property <string> selected_jvm;
     in-out property <[string]> gcs: ["Z", "Shenandoah", "G1", "Parallel"];
     in-out property <[bool]> gcs_toggle: [true, true, true, true];
     in-out property <[string]> args: ["UseCompactObjectHeaders", "LargePages"];
@@ -27,8 +27,8 @@ export global Info {
     in-out property <[string]> stable_fabric_loader_versions;
     in-out property <string> selected_fabric_loader_version;
     in-out property <BenchmarkingStatus> status: BenchmarkingStatus.Configure;
-    in-out property <float> installing: 0.0;
+    in-out property <float> progress: 0.0;
     in-out property <string> installer_msg: "";
     in-out property <string> current_mod_download;
-    in-out property <int> current_mod_download_index: 0;
+    in-out property <int> current_mod_download_index: -1;
 }

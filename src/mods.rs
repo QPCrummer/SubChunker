@@ -7,13 +7,15 @@ use zip::ZipArchive;
 use crate::io::server_dir;
 
 // Mods
-pub const MODS: [&str; 7] = ["Lithium", "Fabric-Api", "Ferritecore", "C2me", "Servercore",
-                                 "Structure_Layout_Optimizer", "ScalableLux"];
-pub const MOD_URLS: [&str; 7] = ["https://modrinth.com/mod/lithium/versions", "https://modrinth.com/mod/fabric-api/versions",
+pub const MODS: [&str; 8] = ["Lithium", "Fabric-Api", "Ferritecore", "C2me", "Servercore",
+                                 "Structure_Layout_Optimizer", "ResourcefulConfig", "ScalableLux"];
+pub const MOD_URLS: [&str; 10] = ["https://modrinth.com/mod/lithium/versions", "https://modrinth.com/mod/fabric-api/versions",
                                      "https://modrinth.com/mod/ferrite-core/versions", "https://modrinth.com/mod/c2me-fabric/versions",
                                      "https://modrinth.com/mod/servercore/versions", "https://modrinth.com/mod/structure-layout-optimizer/versions",
-                                     "https://modrinth.com/mod/scalablelux/versions"];
-pub const CHUNKY_URL: &str = "https://modrinth.com/plugin/chunky/versions";
+                                     "https://modrinth.com/mod/resourceful-config/versions", "https://modrinth.com/mod/scalablelux/versions",
+                                     "https://modrinth.com/plugin/chunky/versions", "https://modrinth.com/project/subchunker-companion/versions"];
+
+pub const REQ_MODS: [&str; 2] = ["Chunky", "SubChunker_Companion"];
 
 
 #[derive(Deserialize)]
@@ -60,6 +62,16 @@ fn get_fabric_mod_id<P: AsRef<Path>>(jar_path: P) -> io::Result<String> {
 }
 
 pub fn get_url(mod_name: String, version: String) -> String {
-    let index = MODS.iter().position(|x| x == &mod_name).unwrap();
-    format!("{}?g={}", MOD_URLS[index], version)
+    let index = if let Some(i) = MODS.iter().position(|x| x == &mod_name.as_str()) {
+        i
+    } else {
+        REQ_MODS.iter().position(|x| x == &mod_name.as_str()).unwrap() + MODS.len()
+    };
+
+    format!("{}?g={}&l=fabric", MOD_URLS[index], version)
+}
+
+pub fn is_mod_installed(mod_name: String, version: String) -> bool {
+    let installed_mods = get_mods(version.to_string());
+    installed_mods.contains(&mod_name.to_lowercase())
 }

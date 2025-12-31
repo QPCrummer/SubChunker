@@ -1,0 +1,69 @@
+import { Info } from "global_info.slint";
+
+export component SpiralLoader inherits Rectangle {
+    in property<int> grid_size: 15;
+
+    Rectangle {
+        background: #2b2b2b;
+        border-radius: 8px;
+
+        vl := VerticalLayout {
+            spacing: 2px;
+            width: 100%;
+            height: 100%;
+
+            for y in grid_size : HorizontalLayout {
+                spacing: 2px;
+
+                for x in grid_size : Rectangle {
+                    width: (vl.width - (grid_size - 1) * 2px) / grid_size;
+                    height: (vl.height - (grid_size - 1) * 2px) / grid_size;
+                    border-radius: 2px;
+
+                    property<int> index: spiral_index(x, y, grid_size);
+                    property<int> total: grid_size * grid_size;
+                    property<int> filled: (Info.progress * total);
+
+                    background: lightblue;
+                    opacity: index < filled ? 1.0 : 0.0;
+
+                    animate opacity {
+                        duration: 200ms;
+                        easing: ease-in;
+                    }
+                }
+            }
+        }
+    }
+
+    function spiral_index(x: int, y: int, size: int) -> int {
+        let cx = (size - 1) / 2;
+        let cy = (size - 1) / 2;
+
+        let dx = x - cx;
+        let dy = y - cy;
+
+        let layer = max(abs(dx), abs(dy));
+
+        if (layer == 0) {
+            return 0;
+        }
+
+        let side = layer * 2;
+        let layer_start = (2 * layer - 1) * (2 * layer - 1);
+
+        if (dx == layer && dy >= -layer && dy < layer) {
+            return layer_start + (dy + layer);
+        }
+
+        if (dy == layer && dx <= layer && dx > -layer) {
+            return layer_start + side + (layer - dx);
+        }
+
+        if (dx == -layer && dy <= layer && dy > -layer) {
+            return layer_start + 2 * side + (layer - dy);
+        }
+
+        return layer_start + 3 * side + (dx + layer);
+    }
+}

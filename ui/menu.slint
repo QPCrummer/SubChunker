@@ -1,9 +1,10 @@
 import { BasicScreen } from "basic_screen.slint";
 import { Info, BenchmarkingStatus } from "global_info.slint";
-import { ProgressIndicator, CheckBox, ScrollView, Slider, Button, ComboBox } from "std-widgets.slint";
+import { ProgressIndicator, CheckBox, ScrollView, Slider, Button, ComboBox, Spinner } from "std-widgets.slint";
 import { SeparatorLine } from "separator.slint";
 import { Callbacks } from "callbacks.slint";
 import { ModInstallPopup } from "mod_install_popup.slint";
+import { SpiralLoader } from "spiral_loader.slint";
 
 export component MainMenu inherits BasicScreen {
     in-out property <string> processor_name;
@@ -178,11 +179,11 @@ export component MainMenu inherits BasicScreen {
                         text: "JVM";
                         font-size: 11pt;
                     }
-                    for jvm[i] in Info.jvms: CheckBox {
-                        text: jvm;
-                        checked: Info.jvms_toggle[i];
-                        toggled => {
-                            Info.jvms_toggle[i] = self.checked;
+
+                    ComboBox {
+                        model: Info.jvms;
+                        selected(current-value) => {
+                            Info.selected_jvm = current-value;
                         }
                     }
 
@@ -258,7 +259,7 @@ export component MainMenu inherits BasicScreen {
             }
 
             prgs := ProgressIndicator {
-                progress <=> Info.installing;
+                progress <=> Info.progress;
                 width: 80%;
                 height: 40px;
                 y: install_text.y + install_text.height + 15px;
@@ -278,6 +279,28 @@ export component MainMenu inherits BasicScreen {
             }
             mod := ModInstallPopup {
                 y: install_mod_text.y + install_mod_text.height + 20px;
+            }
+        }
+        
+        if Info.status == BenchmarkingStatus.Running && Info.progress == 0.0: Rectangle {
+            loading := Text {
+                text: "Loading Benchmark";
+                font-size: 14pt;
+                y: 150px;
+            }
+
+            Spinner {
+                y: loading.y + loading.height + 30px;
+                height: 100px;
+                width: 100px;
+                indeterminate: true;
+            }
+        }
+
+        if Info.status == BenchmarkingStatus.Running && Info.progress != 0.0: Rectangle {
+            SpiralLoader {
+                width: 300px;
+                height: 300px;
             }
         }
     }
